@@ -80,6 +80,65 @@ Open Deep Research supports a wide range of search tools. By default it uses the
 
 See the fields in the [configuration.py](https://github.com/langchain-ai/open_deep_research/blob/main/src/open_deep_research/configuration.py) for various other settings to customize the behavior of Open Deep Research. 
 
+#### Optional Local RAG
+
+Open Deep Research now includes an optional, standalone local RAG pipeline that can be enabled during the current mainline research phase without changing the overall search → research → write workflow.
+
+What it adds:
+
+- A dedicated `src/open_deep_research/rag/` module for local document loading, chunking, embeddings, vector indexing, retrieval, reranking, and citation formatting
+- A `rag_search` research tool that can sit alongside `web_search`
+- Three retrieval modes for the researcher: `web_only`, `rag_only`, and `hybrid`
+
+Supported local sources in the first version:
+
+- `.txt`
+- `.md`
+- `.json`
+- `.pdf` via PyMuPDF
+
+Key configuration fields:
+
+- `rag_enabled`
+- `retrieval_mode`
+- `rag_knowledge_base_paths`
+- `rag_top_k`
+- `rag_chunk_size`
+- `rag_chunk_overlap`
+- `rag_rerank_top_n`
+- `rag_embedding_provider`
+- `rag_vectorstore_provider`
+- `rag_reranker_provider`
+- `rag_json_text_fields`
+
+Example LangGraph config:
+
+```python
+config = {
+    "configurable": {
+        "rag_enabled": True,
+        "retrieval_mode": "hybrid",
+        "search_api": "tavily",
+        "rag_knowledge_base_paths": ["./examples/rag_data"],
+        "rag_top_k": 4,
+        "rag_chunk_size": 800,
+        "rag_chunk_overlap": 100,
+    }
+}
+```
+
+Minimal local example:
+
+```bash
+.venv\Scripts\python.exe examples/rag_local_search.py
+```
+
+Current limitations:
+
+- The shipped default uses built-in hash embeddings and an in-memory vector store to keep the baseline runnable without external services
+- Additional embedding providers, persistent vector stores, and stronger rerankers are designed as extension points, but are not enabled by default
+- Local source citations currently point to file paths instead of public URLs
+
 ### 📊 Evaluation
 
 Open Deep Research is configured for evaluation with [Deep Research Bench](https://huggingface.co/spaces/Ayanami0730/DeepResearch-Leaderboard). This benchmark has 100 PhD-level research tasks (50 English, 50 Chinese), crafted by domain experts across 22 fields (e.g., Science & Tech, Business & Finance) to mirror real-world deep-research needs. It has 2 evaluation metrics, but the leaderboard is based on the RACE score. This uses LLM-as-a-judge (Gemini) to evaluate research reports against a golden set of reports compiled by experts across a set of metrics.

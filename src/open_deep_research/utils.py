@@ -29,8 +29,9 @@ from langgraph.config import get_store
 from mcp import McpError
 from tavily import AsyncTavilyClient
 
-from open_deep_research.configuration import Configuration, SearchAPI
+from open_deep_research.configuration import Configuration, RetrievalMode, SearchAPI
 from open_deep_research.prompts import summarize_webpage_prompt
+from open_deep_research.rag.tooling import rag_search
 from open_deep_research.state import ResearchComplete, Summary
 
 ##########################
@@ -552,6 +553,7 @@ async def get_search_tool(search_api: SearchAPI):
     elif search_api == SearchAPI.TAVILY:
         # Configure Tavily search tool with metadata
         search_tool = tavily_search
+        search_tool.name = "web_search"
         search_tool.metadata = {
             **(search_tool.metadata or {}), 
             "type": "search", 
@@ -565,7 +567,35 @@ async def get_search_tool(search_api: SearchAPI):
         
     # Default fallback for unknown search API types
     return []
-    
+
+def rag_requested(configurable: Configuration) -> bool:
+    """Determine whether the current configuration wants local RAG retrieval enabled."""
+    retrieval_mode = RetrievalMode(get_config_value(configurable.retrieval_mode))
+    return configurable.rag_enabled and retrieval_mode in {
+        RetrievalMode.RAG_ONLY,
+        RetrievalMode.HYBRID,
+    }
+
+async def get_retrieval_tools(config: RunnableConfig):
+    """Configure retrieval tools based on web/RAG retrieval mode settings."""
+    configurable = Configuration.from_runnable_config(config)
+    retrieval_mode = RetrievalMode(get_config_value(configurable.retrieval_mode))
+    retrieval_tools = []
+
+    if retrieval_mode in {RetrievalMode.WEB_ONLY, RetrievalMode.HYBRID}:
+        search_api = SearchAPI(get_config_value(configurable.search_api))
+        retrieval_tools.extend(await get_search_tool(search_api))
+
+    if rag_requested(configurable):
+        rag_search.metadata = {
+            **(rag_search.metadata or {}),
+            "type": "search",
+            "name": "rag_search",
+        }
+        retrieval_tools.append(rag_search)
+
+    return retrieval_tools
+
 async def get_all_tools(config: RunnableConfig):
     """Assemble complete toolkit including research, search, and MCP tools.
     
@@ -578,11 +608,9 @@ async def get_all_tools(config: RunnableConfig):
     # Start with core research tools
     tools = [tool(ResearchComplete), think_tool]
     
-    # Add configured search tools
-    configurable = Configuration.from_runnable_config(config)
-    search_api = SearchAPI(get_config_value(configurable.search_api))
-    search_tools = await get_search_tool(search_api)
-    tools.extend(search_tools)
+    # Add configured retrieval tools
+    retrieval_tools = await get_retrieval_tools(config)
+    tools.extend(retrieval_tools)
     
     # Track existing tool names to prevent conflicts
     existing_tool_names = {
@@ -595,6 +623,47 @@ async def get_all_tools(config: RunnableConfig):
     tools.extend(mcp_tools)
     
     return tools
+
+def has_external_research_tool(tools: list[Any]) -> bool:
+    """Determine whether the tool collection includes anything beyond core control tools."""
+    core_tool_names = {"ResearchComplete", "think_tool"}
+    for available_tool in tools:
+        if isinstance(available_tool, dict):
+            return True
+        if getattr(available_tool, "name", None) not in core_tool_names:
+            return True
+    return False
+
+def get_research_tool_prompt(configurable: Configuration) -> str:
+    """Create a short, mode-aware tool summary for the researcher prompt."""
+    retrieval_mode = RetrievalMode(get_config_value(configurable.retrieval_mode))
+    prompt_lines = []
+    line_number = 1
+
+    if retrieval_mode in {RetrievalMode.WEB_ONLY, RetrievalMode.HYBRID}:
+        search_api = SearchAPI(get_config_value(configurable.search_api))
+        if search_api != SearchAPI.NONE:
+            prompt_lines.append(
+                f"{line_number}. **web_search**: Search the live web for external or up-to-date information."
+            )
+            line_number += 1
+
+    if rag_requested(configurable):
+        prompt_lines.append(
+            f"{line_number}. **rag_search**: Search the configured local knowledge base and return grounded excerpts with citations from local files."
+        )
+        line_number += 1
+
+    prompt_lines.append(
+        f"{line_number}. **think_tool**: For reflection and strategic planning during research."
+    )
+
+    if retrieval_mode == RetrievalMode.HYBRID and rag_requested(configurable):
+        prompt_lines.append(
+            "When local documents need external confirmation or missing context, use both `rag_search` and `web_search` and then compare the findings."
+        )
+
+    return "\n".join(prompt_lines)
 
 def get_notes_from_tool_calls(messages: list[MessageLikeRepresentation]):
     """Extract notes from tool call messages."""

@@ -45,7 +45,9 @@ from open_deep_research.utils import (
     get_api_key_for_model,
     get_model_token_limit,
     get_notes_from_tool_calls,
+    get_research_tool_prompt,
     get_today_str,
+    has_external_research_tool,
     is_token_limit_exceeded,
     openai_websearch_called,
     remove_up_to_last_ai_message,
@@ -382,10 +384,10 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     
     # Get all available research tools (search, MCP, think_tool)
     tools = await get_all_tools(config)
-    if len(tools) == 0:
+    if not has_external_research_tool(tools):
         raise ValueError(
-            "No tools found to conduct research: Please configure either your "
-            "search API or add MCP tools to your configuration."
+            "No external research tools found to conduct research: Please configure "
+            "web search, local RAG knowledge base paths, or MCP tools."
         )
     
     # Step 2: Configure the researcher model with tools
@@ -398,6 +400,7 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     
     # Prepare system prompt with MCP context if available
     researcher_prompt = research_system_prompt.format(
+        retrieval_tool_prompt=get_research_tool_prompt(configurable),
         mcp_prompt=configurable.mcp_prompt or "", 
         date=get_today_str()
     )

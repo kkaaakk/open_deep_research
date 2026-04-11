@@ -1,0 +1,3 @@
+Atlas Launch on-call engineers run one incident drill every month.
+Release cutoffs freeze on Fridays after 17:00 UTC unless an incident commander approves an exception.
+Rollback owners must stay online until post-deployment verification is complete.
