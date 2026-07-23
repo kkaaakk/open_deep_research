@@ -3,11 +3,9 @@
 import asyncio
 import logging
 import os
-import warnings
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
-import aiohttp
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
@@ -18,20 +16,15 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import (
-    BaseTool,
     InjectedToolArg,
-    StructuredTool,
-    ToolException,
     tool,
 )
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from langgraph.config import get_store
-from mcp import McpError
 from tavily import AsyncTavilyClient
 
+from open_deep_research.budget import capture_model_response
 from open_deep_research.configuration import Configuration, RetrievalMode, SearchAPI
 from open_deep_research.prompts import summarize_webpage_prompt
-from open_deep_research.rag.tooling import rag_search
+from open_deep_research.tools.rag_tool import rag_search
 from open_deep_research.state import ResearchComplete, Summary
 
 ##########################
@@ -195,6 +188,7 @@ async def summarize_webpage(model: BaseChatModel, webpage_content: str) -> str:
             model.ainvoke([HumanMessage(content=prompt_content)]),
             timeout=60.0  # 60 second timeout for summarization
         )
+        capture_model_response(summary)
         
         # Format the summary with structured sections
         formatted_summary = (
@@ -243,286 +237,6 @@ def think_tool(reflection: str) -> str:
         Confirmation that reflection was recorded for decision-making
     """
     return f"Reflection recorded: {reflection}"
-
-##########################
-# MCP Utils
-##########################
-
-async def get_mcp_access_token(
-    supabase_token: str,
-    base_mcp_url: str,
-) -> Optional[Dict[str, Any]]:
-    """Exchange Supabase token for MCP access token using OAuth token exchange.
-    
-    Args:
-        supabase_token: Valid Supabase authentication token
-        base_mcp_url: Base URL of the MCP server
-        
-    Returns:
-        Token data dictionary if successful, None if failed
-    """
-    try:
-        # Prepare OAuth token exchange request data
-        form_data = {
-            "client_id": "mcp_default",
-            "subject_token": supabase_token,
-            "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-            "resource": base_mcp_url.rstrip("/") + "/mcp",
-            "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
-        }
-        
-        # Execute token exchange request
-        async with aiohttp.ClientSession() as session:
-            token_url = base_mcp_url.rstrip("/") + "/oauth/token"
-            headers = {"Content-Type": "application/x-www-form-urlencoded"}
-            
-            async with session.post(token_url, headers=headers, data=form_data) as response:
-                if response.status == 200:
-                    # Successfully obtained token
-                    token_data = await response.json()
-                    return token_data
-                else:
-                    # Log error details for debugging
-                    response_text = await response.text()
-                    logging.error(f"Token exchange failed: {response_text}")
-                    
-    except Exception as e:
-        logging.error(f"Error during token exchange: {e}")
-    
-    return None
-
-async def get_tokens(config: RunnableConfig):
-    """Retrieve stored authentication tokens with expiration validation.
-    
-    Args:
-        config: Runtime configuration containing thread and user identifiers
-        
-    Returns:
-        Token dictionary if valid and not expired, None otherwise
-    """
-    store = get_store()
-    
-    # Extract required identifiers from config
-    thread_id = config.get("configurable", {}).get("thread_id")
-    if not thread_id:
-        return None
-        
-    user_id = config.get("metadata", {}).get("owner")
-    if not user_id:
-        return None
-    
-    # Retrieve stored tokens
-    tokens = await store.aget((user_id, "tokens"), "data")
-    if not tokens:
-        return None
-    
-    # Check token expiration
-    expires_in = tokens.value.get("expires_in")  # seconds until expiration
-    created_at = tokens.created_at  # datetime of token creation
-    current_time = datetime.now(timezone.utc)
-    expiration_time = created_at + timedelta(seconds=expires_in)
-    
-    if current_time > expiration_time:
-        # Token expired, clean up and return None
-        await store.adelete((user_id, "tokens"), "data")
-        return None
-
-    return tokens.value
-
-async def set_tokens(config: RunnableConfig, tokens: dict[str, Any]):
-    """Store authentication tokens in the configuration store.
-    
-    Args:
-        config: Runtime configuration containing thread and user identifiers
-        tokens: Token dictionary to store
-    """
-    store = get_store()
-    
-    # Extract required identifiers from config
-    thread_id = config.get("configurable", {}).get("thread_id")
-    if not thread_id:
-        return
-        
-    user_id = config.get("metadata", {}).get("owner")
-    if not user_id:
-        return
-    
-    # Store the tokens
-    await store.aput((user_id, "tokens"), "data", tokens)
-
-async def fetch_tokens(config: RunnableConfig) -> dict[str, Any]:
-    """Fetch and refresh MCP tokens, obtaining new ones if needed.
-    
-    Args:
-        config: Runtime configuration with authentication details
-        
-    Returns:
-        Valid token dictionary, or None if unable to obtain tokens
-    """
-    # Try to get existing valid tokens first
-    current_tokens = await get_tokens(config)
-    if current_tokens:
-        return current_tokens
-    
-    # Extract Supabase token for new token exchange
-    supabase_token = config.get("configurable", {}).get("x-supabase-access-token")
-    if not supabase_token:
-        return None
-    
-    # Extract MCP configuration
-    mcp_config = config.get("configurable", {}).get("mcp_config")
-    if not mcp_config or not mcp_config.get("url"):
-        return None
-    
-    # Exchange Supabase token for MCP tokens
-    mcp_tokens = await get_mcp_access_token(supabase_token, mcp_config.get("url"))
-    if not mcp_tokens:
-        return None
-
-    # Store the new tokens and return them
-    await set_tokens(config, mcp_tokens)
-    return mcp_tokens
-
-def wrap_mcp_authenticate_tool(tool: StructuredTool) -> StructuredTool:
-    """Wrap MCP tool with comprehensive authentication and error handling.
-    
-    Args:
-        tool: The MCP structured tool to wrap
-        
-    Returns:
-        Enhanced tool with authentication error handling
-    """
-    original_coroutine = tool.coroutine
-    
-    async def authentication_wrapper(**kwargs):
-        """Enhanced coroutine with MCP error handling and user-friendly messages."""
-        
-        def _find_mcp_error_in_exception_chain(exc: BaseException) -> McpError | None:
-            """Recursively search for MCP errors in exception chains."""
-            if isinstance(exc, McpError):
-                return exc
-            
-            # Handle ExceptionGroup (Python 3.11+) by checking attributes
-            if hasattr(exc, 'exceptions'):
-                for sub_exception in exc.exceptions:
-                    if found_error := _find_mcp_error_in_exception_chain(sub_exception):
-                        return found_error
-            return None
-        
-        try:
-            # Execute the original tool functionality
-            return await original_coroutine(**kwargs)
-            
-        except BaseException as original_error:
-            # Search for MCP-specific errors in the exception chain
-            mcp_error = _find_mcp_error_in_exception_chain(original_error)
-            if not mcp_error:
-                # Not an MCP error, re-raise the original exception
-                raise original_error
-            
-            # Handle MCP-specific error cases
-            error_details = mcp_error.error
-            error_code = getattr(error_details, "code", None)
-            error_data = getattr(error_details, "data", None) or {}
-            
-            # Check for authentication/interaction required error
-            if error_code == -32003:  # Interaction required error code
-                message_payload = error_data.get("message", {})
-                error_message = "Required interaction"
-                
-                # Extract user-friendly message if available
-                if isinstance(message_payload, dict):
-                    error_message = message_payload.get("text") or error_message
-                
-                # Append URL if provided for user reference
-                if url := error_data.get("url"):
-                    error_message = f"{error_message} {url}"
-                
-                raise ToolException(error_message) from original_error
-            
-            # For other MCP errors, re-raise the original
-            raise original_error
-    
-    # Replace the tool's coroutine with our enhanced version
-    tool.coroutine = authentication_wrapper
-    return tool
-
-async def load_mcp_tools(
-    config: RunnableConfig,
-    existing_tool_names: set[str],
-) -> list[BaseTool]:
-    """Load and configure MCP (Model Context Protocol) tools with authentication.
-    
-    Args:
-        config: Runtime configuration containing MCP server details
-        existing_tool_names: Set of tool names already in use to avoid conflicts
-        
-    Returns:
-        List of configured MCP tools ready for use
-    """
-    configurable = Configuration.from_runnable_config(config)
-    
-    # Step 1: Handle authentication if required
-    if configurable.mcp_config and configurable.mcp_config.auth_required:
-        mcp_tokens = await fetch_tokens(config)
-    else:
-        mcp_tokens = None
-    
-    # Step 2: Validate configuration requirements
-    config_valid = (
-        configurable.mcp_config and 
-        configurable.mcp_config.url and 
-        configurable.mcp_config.tools and 
-        (mcp_tokens or not configurable.mcp_config.auth_required)
-    )
-    
-    if not config_valid:
-        return []
-    
-    # Step 3: Set up MCP server connection
-    server_url = configurable.mcp_config.url.rstrip("/") + "/mcp"
-    
-    # Configure authentication headers if tokens are available
-    auth_headers = None
-    if mcp_tokens:
-        auth_headers = {"Authorization": f"Bearer {mcp_tokens['access_token']}"}
-    
-    mcp_server_config = {
-        "server_1": {
-            "url": server_url,
-            "headers": auth_headers,
-            "transport": "streamable_http"
-        }
-    }
-    # TODO: When Multi-MCP Server support is merged in OAP, update this code
-    
-    # Step 4: Load tools from MCP server
-    try:
-        client = MultiServerMCPClient(mcp_server_config)
-        available_mcp_tools = await client.get_tools()
-    except Exception:
-        # If MCP server connection fails, return empty list
-        return []
-    
-    # Step 5: Filter and configure tools
-    configured_tools = []
-    for mcp_tool in available_mcp_tools:
-        # Skip tools with conflicting names
-        if mcp_tool.name in existing_tool_names:
-            warnings.warn(
-                f"MCP tool '{mcp_tool.name}' conflicts with existing tool name - skipping"
-            )
-            continue
-        
-        # Only include tools specified in configuration
-        if mcp_tool.name not in set(configurable.mcp_config.tools):
-            continue
-        
-        # Wrap tool with authentication handling and add to list
-        enhanced_tool = wrap_mcp_authenticate_tool(mcp_tool)
-        configured_tools.append(enhanced_tool)
-    
-    return configured_tools
 
 
 ##########################
@@ -598,30 +312,32 @@ async def get_retrieval_tools(config: RunnableConfig):
 
 async def get_all_tools(config: RunnableConfig):
     """Assemble complete toolkit including research, search, and MCP tools.
-    
+
     Args:
         config: Runtime configuration specifying search API and MCP settings
-        
+
     Returns:
         List of all configured and available tools for research operations
     """
+    from open_deep_research.mcp import load_mcp_tools
+
     # Start with core research tools
     tools = [tool(ResearchComplete), think_tool]
-    
+
     # Add configured retrieval tools
     retrieval_tools = await get_retrieval_tools(config)
     tools.extend(retrieval_tools)
-    
+
     # Track existing tool names to prevent conflicts
     existing_tool_names = {
-        tool.name if hasattr(tool, "name") else tool.get("name", "web_search") 
+        tool.name if hasattr(tool, "name") else tool.get("name", "web_search")
         for tool in tools
     }
-    
-    # Add MCP tools if configured
+
+    # Add MCP tools if configured (multi-server, fault-isolated)
     mcp_tools = await load_mcp_tools(config, existing_tool_names)
     tools.extend(mcp_tools)
-    
+
     return tools
 
 def has_external_research_tool(tools: list[Any]) -> bool:
@@ -635,7 +351,14 @@ def has_external_research_tool(tools: list[Any]) -> bool:
     return False
 
 def get_research_tool_prompt(configurable: Configuration) -> str:
-    """Create a short, mode-aware tool summary for the researcher prompt."""
+    """Create a short, mode-aware tool summary for the researcher prompt.
+
+    .. deprecated::
+        Prefer :func:`build_dynamic_tool_prompt` which reflects the **actual**
+        tool list bound for the current invocation rather than a static
+        template.  Kept for backward compatibility with callers that don't
+        have access to the concrete tool list.
+    """
     retrieval_mode = RetrievalMode(get_config_value(configurable.retrieval_mode))
     prompt_lines = []
     line_number = 1
@@ -649,8 +372,13 @@ def get_research_tool_prompt(configurable: Configuration) -> str:
             line_number += 1
 
     if rag_requested(configurable):
+        rag_sources = "local documents"
+        if configurable.rag_memory_enabled and (
+            configurable.rag_memory_paths or configurable.rag_memory_mysql_url
+        ):
+            rag_sources += " and chat memory"
         prompt_lines.append(
-            f"{line_number}. **rag_search**: Search the configured local knowledge base and return grounded excerpts with citations from local files."
+            f"{line_number}. **rag_search**: Search the configured {rag_sources} and return grounded excerpts with citations. Use only cited excerpts for local-knowledge or memory claims."
         )
         line_number += 1
 
@@ -664,6 +392,98 @@ def get_research_tool_prompt(configurable: Configuration) -> str:
         )
 
     return "\n".join(prompt_lines)
+
+
+def build_dynamic_tool_prompt(
+    tools: list,
+    configurable: Configuration | None = None,
+    *,
+    active_domains: set[str] | None = None,
+) -> str:
+    """Build a tool prompt that reflects the **actual** tools bound for this call.
+
+    Unlike :func:`get_research_tool_prompt` which outputs a static template,
+    this function inspects the concrete tool list and groups tools by their
+    domain, giving the LLM an accurate picture of what is (and isn't)
+    available for the current invocation.
+
+    Parameters
+    ----------
+    tools:
+        The filtered tool list that will be passed to ``bind_tools()``.
+    configurable:
+        Optional Configuration for RAG-mode detection.
+    active_domains:
+        Optional set of domain names that survived filtering — used to
+        add a note about which domains are active vs. inactive.
+
+    Returns
+    -------
+    str
+        A Markdown-formatted tool listing for inclusion in the system prompt.
+    """
+    from open_deep_research.mcp.domain_filter import (
+        DOMAIN_REGISTRY,
+        classify_tools,
+        get_domain_label,
+        iter_domain_labels,
+    )
+
+    buckets = classify_tools(tools)
+    active_domain_names = set(buckets.keys())
+    lines: list[str] = []
+    counter = 1
+
+    # Iterate domains in registry order — dynamically, not hardcoded
+    ordered = iter_domain_labels(active_domain_names)
+    for domain, label in ordered:
+        domain_tools = buckets.pop(domain, [])
+        if not domain_tools:
+            continue
+        lines.append(f"### {label}")
+        for tool in domain_tools:
+            name = tool.get("name", "") if isinstance(tool, dict) else getattr(tool, "name", "")
+            desc = ""
+            if not isinstance(tool, dict):
+                desc = (getattr(tool, "description", "") or "").split("\n")[0][:120]
+            if desc:
+                lines.append(f"{counter}. **{name}**: {desc}")
+            else:
+                lines.append(f"{counter}. **{name}**")
+            counter += 1
+        lines.append("")
+
+    # Note: which domains are INACTIVE (helps LLM avoid guessing)
+    if active_domains:
+        inactive = sorted(set(active_domains) - active_domain_names)
+    else:
+        inactive = sorted(
+            d.name for d in DOMAIN_REGISTRY
+            if d.name not in active_domain_names and not d.always_active
+        ) if buckets else []
+    if inactive:
+        labels = [get_domain_label(d) for d in inactive]
+        lines.append(
+            f"*Note: tools from these domains are NOT available for "
+            f"this query: {', '.join(labels)}. Do not attempt to use them.*"
+        )
+
+    # Guardrails (always included)
+    lines.append(
+        "**CRITICAL: Use think_tool after each retrieval step to reflect on "
+        "results and plan next steps. Do not call think_tool together with "
+        "other tools — it should be used alone to reflect on previous results.**"
+    )
+
+    if any(getattr(t, "name", "") == "rag_search" for t in tools if not isinstance(t, dict)):
+        lines.append(
+            "**CRITICAL: When using rag_search, only make claims that are "
+            "supported by returned SOURCE citations. If the cited excerpts do "
+            "not support the answer, say the local knowledge base or chat "
+            "memory does not contain enough cited evidence.**"
+        )
+
+    return "\n".join(lines)
 
 def get_notes_from_tool_calls(messages: list[MessageLikeRepresentation]):
     """Extract notes from tool call messages."""
@@ -895,6 +715,8 @@ MODEL_TOKEN_LIMITS = {
     "bedrock:us.anthropic.claude-sonnet-4-20250514-v1:0": 200000,
     "bedrock:us.anthropic.claude-opus-4-20250514-v1:0": 200000,
     "anthropic.claude-opus-4-1-20250805-v1:0": 200000,
+    "deepseek:deepseek-chat": 131072,
+    "deepseek:deepseek-reasoner": 131072,
 }
 
 def get_model_token_limit(model_string):
@@ -972,14 +794,22 @@ def get_api_key_for_model(model_name: str, config: RunnableConfig):
             return api_keys.get("ANTHROPIC_API_KEY")
         elif model_name.startswith("google"):
             return api_keys.get("GOOGLE_API_KEY")
+        elif model_name.startswith("deepseek:"):
+            return api_keys.get("DEEPSEEK_API_KEY")
+        elif model_name.startswith("groq:"):
+            return api_keys.get("GROQ_API_KEY")
         return None
     else:
-        if model_name.startswith("openai:"): 
+        if model_name.startswith("openai:"):
             return os.getenv("OPENAI_API_KEY")
         elif model_name.startswith("anthropic:"):
             return os.getenv("ANTHROPIC_API_KEY")
         elif model_name.startswith("google"):
             return os.getenv("GOOGLE_API_KEY")
+        elif model_name.startswith("deepseek:"):
+            return os.getenv("DEEPSEEK_API_KEY")
+        elif model_name.startswith("groq:"):
+            return os.getenv("GROQ_API_KEY")
         return None
 
 def get_tavily_api_key(config: RunnableConfig):

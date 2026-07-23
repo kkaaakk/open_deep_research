@@ -11,7 +11,7 @@ from open_deep_research.rag.service import (
 
 def main() -> None:
     """Build a local in-memory index and run a single RAG query."""
-    example_data_dir = Path(__file__).resolve().parent / "rag_data"
+    example_data_dir = Path(__file__).resolve().parents[1] / "data" / "knowledge"
     reset_rag_pipeline_cache()
 
     pipeline = get_or_create_rag_pipeline(

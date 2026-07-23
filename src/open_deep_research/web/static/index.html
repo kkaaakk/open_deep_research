@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Deep Research</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>Open Deep Research</h1>
+            <span class="subtitle">AI-powered research agent</span>
+        </header>
+
+        <!-- Input -->
+        <section class="input-panel">
+            <label for="topic" class="input-label">What would you like me to research?</label>
+            <textarea id="topic" class="topic-input"
+                placeholder="e.g., What are the latest advances in CRISPR gene editing?"
+                rows="3" autofocus></textarea>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label for="model">Model</label>
+                    <select id="model">
+                        <option value="deepseek:deepseek-chat" selected>DeepSeek V4 Pro</option>
+                        <option value="openai:gpt-4.1">GPT-4.1</option>
+                        <option value="openai:gpt-4o">GPT-4o</option>
+                        <option value="anthropic:claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                        <option value="anthropic:claude-opus-4-20250514">Claude Opus 4</option>
+                        <option value="google:gemini-2.5-pro">Gemini 2.5 Pro</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="search">Search</label>
+                    <select id="search">
+                        <option value="tavily">Tavily</option>
+                        <option value="openai">OpenAI Web Search</option>
+                        <option value="anthropic">Anthropic Web Search</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="mode">Mode</label>
+                    <select id="mode">
+                        <option value="fast">Fast</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="deep">Deep</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="scenario">Scenario</label>
+                    <select id="scenario" onchange="toggleScenario()">
+                        <option value="general_research" selected>Research</option>
+                        <option value="public_opinion_risk">Public Opinion</option>
+                    </select>
+                </div>
+                <button id="start-btn" class="btn-start" onclick="startResearch()">
+                    Start Research
+                </button>
+                <button id="stop-btn" class="btn-stop hidden" onclick="stopResearch()">
+                    Stop
+                </button>
+            </div>
+            <div id="po-extra" class="hidden" style="margin-top:12px;padding:14px 16px;background:#f6f8fa;border-radius:8px;border:1px solid var(--border);">
+                <div style="margin-bottom:10px;">
+                    <label for="org-context" style="font-size:0.82rem;font-weight:600;color:var(--text-secondary);">Organization context (optional)</label>
+                    <input type="text" id="org-context" class="topic-input" style="padding:8px 12px;font-size:0.85rem;margin-top:4px;"
+                        placeholder="e.g., Acme Corp — consumer electronics, US market">
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="rag-enabled" checked style="accent-color:var(--accent);">
+                    <label for="rag-enabled" style="font-size:0.85rem;">Enable RAG (local knowledge base)</label>
+                </div>
+                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;margin-left:24px;">
+                    Requires documents in <code>data/knowledge/</code> and <code>data/memory/</code>
+                </div>
+            </div>
+            </div>
+        </section>
+
+        <!-- Status -->
+        <div id="status-bar" class="status-bar hidden">
+            <span id="status-text"></span>
+            <span id="status-timer" class="status-timer"></span>
+        </div>
+
+        <!-- Live Log -->
+        <section id="log-panel" class="log-panel hidden">
+            <div id="log-entries" class="log-entries"></div>
+        </section>
+
+        <!-- Results -->
+        <section id="results-panel" class="results-panel hidden">
+            <div class="results-header">
+                <h2>Research Report</h2>
+                <div class="results-actions">
+                    <button class="btn-action" onclick="downloadReport()">Download</button>
+                    <button class="btn-action" onclick="copyReport()">Copy</button>
+                </div>
+            </div>
+            <div id="report-content" class="report-content"></div>
+            <div id="usage-bar" class="usage-bar hidden">
+                <span>Tokens: <strong id="usage-total">0</strong></span>
+                <span class="usage-sep">|</span>
+                <span>in <span id="usage-input">0</span></span>
+                <span>out <span id="usage-output">0</span></span>
+                <span class="usage-sep">|</span>
+                <span><span id="usage-calls">0</span> calls</span>
+            </div>
+        </section>
+
+        <!-- Empty State -->
+        <section id="empty-state" class="empty-state">
+            <div class="empty-icon">🔬</div>
+            <p>Enter a research topic above and click <strong>Start Research</strong></p>
+            <div class="example-topics">
+                <button class="example-chip" onclick="setTopic('What are the latest advances in quantum computing?')">Quantum computing advances</button>
+                <button class="example-chip" onclick="setTopic('Compare renewable energy adoption across EU countries in 2025')">EU renewable energy 2025</button>
+                <button class="example-chip" onclick="setTopic('How is AI being used in drug discovery today?')">AI in drug discovery</button>
+            </div>
+        </section>
+
+        <footer class="footer">
+            Open Deep Research · <a href="https://github.com/langchain-ai/open_deep_research" target="_blank">GitHub</a>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

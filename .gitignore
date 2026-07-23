@@ -33,6 +33,7 @@ ENV/
 # IDE specific files
 .idea/
 .vscode/
+docs/.obsidian/
 *.swp
 *.swo
 .DS_Store
@@ -44,6 +45,7 @@ ENV/
 .coverage
 htmlcov/
 .pytest_cache/
+pytest-cache-files-*/
 .tox/
 
 # Logs
@@ -59,11 +61,24 @@ logs/
 # Dependencies
 node_modules/
 
+# VitePress
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+
 # LangGraph specific
 .langgraph/
+.langgraph_api/
 
 # Temporary files
 tmp/
 temp/
+.benchmarks/
+.hf_cache*/
+.rag_models/
+.ruff_cache/
+.uv-cache/
+.tmp-*
+data/indexes/rag/*
+!data/indexes/rag/.gitkeep
 
-.langgraph_api
+.venv/

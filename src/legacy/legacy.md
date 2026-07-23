@@ -10,16 +10,17 @@ Open Deep Research is an experimental, fully open-source research assistant that
 
 ![multi-agent-researcher](https://github.com/user-attachments/assets/3c734c3c-57aa-4bc0-85dd-74e2ec2c0880)
 
-
 ### 🚀 Quickstart
 
 Clone the repository:
+
 ```bash
 git clone https://github.com/langchain-ai/open_deep_research.git
 cd open_deep_research
 ```
 
 Then edit the `.env` file to customize the environment variables (for model selection, search tools, and other configuration settings):
+
 ```bash
 cp .env.example .env
 ```
@@ -39,15 +40,16 @@ uvx --refresh --from "langgraph-cli[inmem]" --with-editable . --python 3.11 lang
 #### Windows / Linux
 
 ```powershell
-# Install dependencies 
+# Install dependencies
 pip install -e .
-pip install -U "langgraph-cli[inmem]" 
+pip install -U "langgraph-cli[inmem]"
 
 # Start the LangGraph server
 langgraph dev
 ```
 
 Use this to open the Studio UI:
+
 ```
 - 🚀 API: http://127.0.0.1:2024
 - 🎨 Studio UI: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
@@ -90,20 +92,20 @@ The report is produced as markdown.
 
 Available search tools:
 
-* [Tavily API](https://tavily.com/) - General web search
-* [Perplexity API](https://www.perplexity.ai/hub/blog/introducing-the-sonar-pro-api) - General web search
-* [Exa API](https://exa.ai/) - Powerful neural search for web content
-* [ArXiv](https://arxiv.org/) - Academic papers in physics, mathematics, computer science, and more
-* [PubMed](https://pubmed.ncbi.nlm.nih.gov/) - Biomedical literature from MEDLINE, life science journals, and online books
-* [Linkup API](https://www.linkup.so/) - General web search
-* [DuckDuckGo API](https://duckduckgo.com/) - General web search
-* [Google Search API/Scrapper](https://google.com/) - Create custom search engine [here](https://programmablesearchengine.google.com/controlpanel/all) and get API key [here](https://developers.google.com/custom-search/v1/introduction)
-* [Microsoft Azure AI Search](https://azure.microsoft.com/en-us/products/ai-services/ai-search) - Cloud based vector database solution 
+- [Tavily API](https://tavily.com/) - General web search
+- [Perplexity API](https://www.perplexity.ai/hub/blog/introducing-the-sonar-pro-api) - General web search
+- [Exa API](https://exa.ai/) - Powerful neural search for web content
+- [ArXiv](https://arxiv.org/) - Academic papers in physics, mathematics, computer science, and more
+- [PubMed](https://pubmed.ncbi.nlm.nih.gov/) - Biomedical literature from MEDLINE, life science journals, and online books
+- [Linkup API](https://www.linkup.so/) - General web search
+- [DuckDuckGo API](https://duckduckgo.com/) - General web search
+- [Google Search API/Scrapper](https://google.com/) - Create custom search engine [here](https://programmablesearchengine.google.com/controlpanel/all) and get API key [here](https://developers.google.com/custom-search/v1/introduction)
+- [Microsoft Azure AI Search](https://azure.microsoft.com/en-us/products/ai-services/ai-search) - Cloud based vector database solution
 
-Open Deep Research is compatible with many different LLMs: 
+Open Deep Research is compatible with many different LLMs:
 
-* You can select any model that is integrated [with the `init_chat_model()` API](https://python.langchain.com/docs/how_to/chat_models_universal_init/)
-* See full list of supported integrations [here](https://python.langchain.com/api_reference/langchain/chat_models/langchain.chat_models.base.init_chat_model.html)
+- You can select any model that is integrated [with the `init_chat_model()` API](https://python.langchain.com/docs/how_to/chat_models_universal_init/)
+- See full list of supported integrations [here](https://python.langchain.com/api_reference/langchain/chat_models/langchain.chat_models.base.init_chat_model.html)
 
 ### Using the package
 
@@ -157,7 +159,7 @@ This implementation focuses on efficiency and parallelization, making it ideal f
 You can customize the multi-agent implementation through several parameters:
 
 - `supervisor_model`: Model for the supervisor agent (default: "anthropic:claude-3-5-sonnet-latest")
-- `researcher_model`: Model for researcher agents (default: "anthropic:claude-3-5-sonnet-latest") 
+- `researcher_model`: Model for researcher agents (default: "anthropic:claude-3-5-sonnet-latest")
 - `number_of_queries`: Number of search queries to generate per section (default: 2)
 - `search_api`: API to use for web searches (default: "tavily", options include "duckduckgo", "none")
 - `ask_for_clarification`: Whether the supervisor should ask clarifying questions before research (default: false) - **Important**: Set to `true` to enable the Question tool for the supervisor agent
@@ -206,7 +208,8 @@ config = {
 
 #### Studio
 
-MCP server config: 
+MCP server config:
+
 ```
 {
   "filesystem": {
@@ -221,40 +224,43 @@ MCP server config:
 }
 ```
 
-MCP prompt: 
+MCP prompt:
+
 ```
 CRITICAL: You MUST follow this EXACT sequence when using filesystem tools:
 
 1. FIRST: Call `list_allowed_directories` tool to discover allowed directories
-2. SECOND: Call `list_directory` tool on a specific directory from step 1 to see available files  
+2. SECOND: Call `list_directory` tool on a specific directory from step 1 to see available files
 3. THIRD: Call `read_file` tool to read specific files found in step 2
 
 DO NOT call `list_directory` or `read_file` until you have first called `list_allowed_directories`. You must discover the allowed directories before attempting to browse or read files.
 ```
 
-MCP tools: 
+MCP tools:
+
 ```
 list_allowed_directories
-list_directory 
+list_directory
 read_file
 ```
 
-Example test topic and follow-up feedback that you can provide that will reference the included file: 
+Example test topic and follow-up feedback that you can provide that will reference the included file:
 
 Topic:
+
 ```
 I want an overview of vibe coding
 ```
 
-Follow-up to the question asked by the research agent: 
+Follow-up to the question asked by the research agent:
 
 ```
 I just want a single section report on vibe coding that highlights an interesting / fun example
 ```
 
-Resulting trace: 
+Resulting trace:
 
-https://smith.langchain.com/public/d871311a-f288-4885-8f70-440ab557c3cf/r
+<https://smith.langchain.com/public/d871311a-f288-4885-8f70-440ab557c3cf/r>
 
 ### Configuration Options
 
@@ -285,6 +291,7 @@ Not all search APIs support additional configuration parameters. Here are the on
 - **Linkup**: `depth`
 
 Example with Exa configuration:
+
 ```python
 thread = {"configurable": {"thread_id": str(uuid.uuid4()),
                            "search_api": "exa",
@@ -300,17 +307,20 @@ thread = {"configurable": {"thread_id": str(uuid.uuid4()),
 
 (1) You can use models supported with [the `init_chat_model()` API](https://python.langchain.com/docs/how_to/chat_models_universal_init/). See full list of supported integrations [here](https://python.langchain.com/api_reference/langchain/chat_models/langchain.chat_models.base.init_chat_model.html).
 
-(2) ***The workflow planner and writer models need to support structured outputs***: Check whether structured outputs are supported by the model you are using [here](https://python.langchain.com/docs/integrations/chat/).
+(2) **_The workflow planner and writer models need to support structured outputs_**: Check whether structured outputs are supported by the model you are using [here](https://python.langchain.com/docs/integrations/chat/).
 
-(3) ***The agent models need to support tool calling:*** Ensure tool calling is well supoorted; tests have been done with Claude 3.7, o3, o3-mini, and gpt4.1. See [here](https://smith.langchain.com/public/adc5d60c-97ee-4aa0-8b2c-c776fb0d7bd6/d).
+(3) **_The agent models need to support tool calling:_** Ensure tool calling is well supoorted; tests have been done with Claude 3.7, o3, o3-mini, and gpt4.1. See [here](https://smith.langchain.com/public/adc5d60c-97ee-4aa0-8b2c-c776fb0d7bd6/d).
 
 (4) With Groq, there are token per minute (TPM) limits if you are on the `on_demand` service tier:
+
 - The `on_demand` service tier has a limit of `6000 TPM`
 - You will want a [paid plan](https://github.com/cline/cline/issues/47#issuecomment-2640992272) for section writing with Groq models
 
-(5) `deepseek-R1` [is not strong at function calling](https://api-docs.deepseek.com/guides/reasoning_model), which the assistant uses to generate structured outputs for report sections and report section grading. See example traces [here](https://smith.langchain.com/public/07d53997-4a6d-4ea8-9a1f-064a85cd6072/r).  
+(5) `deepseek-R1` [is not strong at function calling](https://api-docs.deepseek.com/guides/reasoning_model), which the assistant uses to generate structured outputs for report sections and report section grading. See example traces [here](https://smith.langchain.com/public/07d53997-4a6d-4ea8-9a1f-064a85cd6072/r).
+
 - Consider providers that are strong at function calling such as OpenAI, Anthropic, and certain OSS models like Groq's `llama-3.3-70b-versatile`.
 - If you see the following error, it is likely due to the model not being able to produce structured outputs (see [trace](https://smith.langchain.com/public/8a6da065-3b8b-4a92-8df7-5468da336cbe/r)):
+
 ```
 groq.APIError: Failed to call a function. Please adjust your prompt. See 'failed_generation' for more details.
 ```
@@ -328,6 +338,7 @@ Open Deep Research includes two comprehensive evaluation systems to assess repor
 A developer-friendly testing framework that provides immediate feedback during development and testing cycles.
 
 #### **Features:**
+
 - **Rich Console Output**: Formatted tables, progress indicators, and color-coded results
 - **Binary Pass/Fail Testing**: Clear success/failure criteria for CI/CD integration
 - **LangSmith Integration**: Automatic experiment tracking and logging
@@ -335,7 +346,9 @@ A developer-friendly testing framework that provides immediate feedback during d
 - **Real-time Feedback**: Live output during test execution
 
 #### **Evaluation Criteria:**
+
 The system evaluates reports against 9 comprehensive quality dimensions:
+
 - Topic relevance (overall and section-level)
 - Structure and logical flow
 - Introduction and conclusion quality
@@ -345,6 +358,7 @@ The system evaluates reports against 9 comprehensive quality dimensions:
 - Overall research depth and accuracy
 
 #### **Usage:**
+
 ```bash
 # Run all agents with default settings
 python tests/run_test.py --all
@@ -367,6 +381,7 @@ python tests/run_test.py --all \
 ```
 
 #### **Key Files:**
+
 - `tests/run_test.py`: Main test runner with rich CLI interface
 - `tests/test_report_quality.py`: Core test implementation
 - `tests/conftest.py`: Pytest configuration and CLI options
@@ -376,6 +391,7 @@ python tests/run_test.py --all \
 A comprehensive batch evaluation system designed for detailed analysis and comparative studies.
 
 #### **Features:**
+
 - **Multi-dimensional Scoring**: Four specialized evaluators with 1-5 scale ratings
 - **Weighted Criteria**: Detailed scoring with customizable weights for different quality aspects
 - **Dataset-driven Evaluation**: Batch processing across multiple test cases
@@ -400,12 +416,14 @@ A comprehensive batch evaluation system designed for detailed analysis and compa
 4. **Groundedness**: Evaluation of alignment with retrieved context and sources
 
 #### **Usage:**
+
 ```bash
 # Run comprehensive evaluation on LangSmith datasets
 python tests/evals/run_evaluate.py
 ```
 
 #### **Key Files:**
+
 - `tests/evals/run_evaluate.py`: Main evaluation script
 - `tests/evals/evaluators.py`: Four specialized evaluator functions
 - `tests/evals/prompts.py`: Detailed evaluation prompts for each dimension
@@ -414,6 +432,7 @@ python tests/evals/run_evaluate.py
 ### When to Use Each System
 
 **Use Pytest System for:**
+
 - Development and debugging cycles
 - CI/CD pipeline integration
 - Quick model comparison experiments
@@ -421,6 +440,7 @@ python tests/evals/run_evaluate.py
 - Gate-keeping before production deployments
 
 **Use LangSmith System for:**
+
 - Comprehensive model evaluation across datasets
 - Research and analysis of system performance
 - Detailed performance profiling and benchmarking
@@ -436,5 +456,5 @@ Both evaluation systems complement each other and provide comprehensive coverage
 Follow the [quickstart](#-quickstart) to start LangGraph server locally.
 
 ### Hosted deployment
- 
-You can easily deploy to [LangGraph Platform](https://langchain-ai.github.io/langgraph/concepts/#deployment-options). 
+
+You can easily deploy to [LangGraph Platform](https://langchain-ai.github.io/langgraph/concepts/#deployment-options).
