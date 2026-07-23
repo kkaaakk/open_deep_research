@@ -1,6 +1,6 @@
-# 🔬 Open Deep Research
+# 🔬 Public Opinion Research
 
-基于 LangGraph 的开源深度研究智能体，支持多模型提供商、多种搜索工具和 MCP (Model Context Protocol) 服务器。在原版 [open_deep_research](https://github.com/langchain-ai/open_deep_research) 基础上，扩展了本地 RAG 知识库、舆情分析、社交媒媒体监控、长期记忆等能力。
+基于 LangGraph 的开源舆情深度研究智能体，支持多模型提供商、多种搜索工具和 MCP (Model Context Protocol) 服务器。在原版 [Open Deep Research](https://github.com/langchain-ai/open_deep_research) 基础上，扩展了本地 RAG 知识库、舆情分析、社交媒媒体监控、长期记忆等能力。
 
 ## 🆕 扩展功能
 

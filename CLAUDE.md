@@ -1,8 +1,8 @@
-# Open Deep Research Repository Overview
+# Public Opinion Research Repository Overview
 
 ## Project Description
 
-Open Deep Research is a configurable, fully open-source deep research agent that works across multiple model providers, search tools, and MCP (Model Context Protocol) servers. It enables automated research with parallel processing and comprehensive report generation.
+Public Opinion Research is a configurable, fully open-source deep research agent specialized in public opinion analysis. It works across multiple model providers, search tools, and MCP (Model Context Protocol) servers. It enables automated research with parallel processing, comprehensive report generation, and real-time public opinion monitoring.
 
 ## Repository Structure
 
